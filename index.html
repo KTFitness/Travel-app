@@ -358,7 +358,7 @@ function staysTab(t){
 }
 function daysTab(t){
  const days=[...t.days].sort(daySort);
- return`<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">${days.length} day${days.length===1?'':'s'} planned</span><div class="row">${t.start&&t.end?'<button class="btn sm" data-act="gen-days">Fill in all dates</button>':''}<button class="btn tag sm" data-act="add-day">+ Day</button></div></div>
+ return`<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="sub">${days.length} day${days.length===1?'':'s'}${t.start&&t.end?` · ${diff(t.start,t.end)} nights`:''}</span><div class="row">${t.start&&t.end?'<button class="btn sm" data-act="gen-days">Fill in all dates</button>':''}<button class="btn tag sm" data-act="add-day">+ Day</button></div></div>
  ${days.map((d,i)=>{const r=blockIssues(d);const open=V.dayOpen===d.id;let bad=0,warn=0;for(const v of r.issues.values()){bad+=v.filter(x=>x[0]==='bad').length;warn+=v.filter(x=>x[0]==='warn').length}
  const st=stayOn(t,d.date);
  return`<div class="card"><div data-act="open-day" data-id="${d.id}" style="cursor:pointer"><div class="row" style="justify-content:space-between"><div><div class="sub">Day ${d.num||(d.date&&t.start?diff(t.start,d.date)+1:'')}${d.date?' · '+esc(fd(d.date)):''}</div><h3>${esc(d.title||'Untitled day')}</h3></div><span aria-hidden="true">${open?'▾':'▸'}</span></div>
