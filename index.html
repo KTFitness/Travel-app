@@ -167,7 +167,17 @@ const mins=t=>{if(!t||!/^\d{1,2}:\d{2}/.test(t))return null;const [h,m]=t.split(
 const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 const dur=m=>m>=60?Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':''):m+' min';
 const money=(n,c)=>n==null||n===''?'':(c||'AUD')+' '+Number(n).toLocaleString('en-AU',{maximumFractionDigits:2});
-const STATUS=[['travelling','Travelling','var(--tag)'],['booked','Booked','var(--ok)'],['planning','Planning','var(--navy)'],['research','Researching','#7a5cc2'],['backup','Backup, ready to go','#8a6d1d'],['done','Done','#7b8794']];
+const STATUS=[['travelling','Travelling','var(--tag)'],['booked','Booked','var(--ok)'],['backup','Ready to book','#8a6d1d'],['planning','Planning','var(--navy)'],['research','Researching','#7a5cc2'],['done','Done','#7b8794']];
+const READY=[['dates','Dates chosen',t=>t.start&&t.end?'Dates set: '+fr(t.start,t.end):'No dates yet'],
+ ['transport','Flights and transport there and back chosen: airline, flight numbers, times',t=>{const n=t.bookings.filter(b=>['flight','ferry','train'].includes(b.type)&&b.status!=='cancelled').length;return n+' flight, ferry or train entr'+(n===1?'y':'ies')}],
+ ['stays','A named place for every night',t=>{const sp=t.start&&t.end?diff(t.start,t.end):null;const g=t.stays.reduce((a,x)=>a+(Number(x.nights)||0),0);const un=t.stays.filter(x=>!x.accom).length;return (sp!=null?g+' of '+sp+' nights in stays':g+' nights in stays')+(un?', '+un+' without a place picked':'')}],
+ ['car','Car hire company, pick-up and drop-off chosen, or not needed',t=>{const n=t.bookings.filter(b=>b.type==='car'&&b.status!=='cancelled').length;return n?n+' car entr'+(n===1?'y':'ies'):'No car entries'}],
+ ['tours','Tours, timed entries and ferries chosen, with dates',t=>{const n=t.bookings.filter(b=>['tour','ferry','other'].includes(b.type)&&b.status!=='cancelled').length;return n+' tour or other entr'+(n===1?'y':'ies')}],
+ ['days','Day-by-day plan done',t=>{const d=t.days.filter(x=>x.blocks&&x.blocks.length).length;const sp=t.start&&t.end?diff(t.start,t.end)+1:null;return d+(sp?' of '+sp:'')+' days planned'}],
+ ['costs','Costs known for every booking and stay',t=>{const n=t.bookings.filter(b=>b.status!=='cancelled'&&(b.cost===''||b.cost==null)).length+t.stays.filter(x=>x.cost===''||x.cost==null).length;return n?n+' without a cost':'All have a cost'}],
+ ['booklist','Booking list ready: what to book, where, and by when',t=>{const n=t.bookings.filter(b=>b.status==='to-book').length;return n+' marked To book'}],
+ ['insurance','Travel insurance cover checked for this trip',t=>'']];
+const readyN=t=>READY.filter(r=>(t.ready||{})[r[0]]).length;
 const stLabel=s=>(STATUS.find(x=>x[0]===s)||['',s])[1];
 const stCol=s=>(STATUS.find(x=>x[0]===s)||[0,0,'var(--navy)'])[2];
 const BTYPES={flight:'Flight',car:'Hire car',ferry:'Ferry',train:'Train or bus',tour:'Tour or hike',accom:'Accommodation',insurance:'Insurance',other:'Other'};
@@ -182,7 +192,7 @@ let saveOk=true;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));saveOk=true}catch(e){saveOk=false;toast('Could not save. Export a backup now.')}}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 const trip=id=>S.trips.find(t=>t.id===id);
-const normTrip=t=>{for(const k of['stays','bookings','days','lists','claims','openItems','considered'])if(!Array.isArray(t[k]))t[k]=[];return t};
+const normTrip=t=>{for(const k of['stays','bookings','days','lists','claims','openItems','considered'])if(!Array.isArray(t[k]))t[k]=[];if(!t.ready||typeof t.ready!=='object')t.ready={};return t};
 S.trips.forEach(normTrip);
 
 /* ---------- toast / sheet ---------- */
@@ -249,6 +259,7 @@ function tripChecks(t){
  let dayIss=0;for(const d of t.days){const r=blockIssues(d);for(const v of r.issues.values())dayIss+=v.filter(x=>x[0]==='bad').length}
  if(dayIss)c.push(['bad',`${dayIss} timing clash${dayIss>1?'es':''} in day plans`]);
  const oi=t.openItems.filter(o=>!o.done).length;if(oi)c.push(['info',`${oi} open item${oi>1?'s':''}`]);
+ if(t.status==='backup'){const rn=readyN(t);if(rn<READY.length)c.push(['bad',`Marked Ready to book, but only ${rn} of ${READY.length} on the ready list are ticked`])}
  return c;
 }
 const pillFor=c=>c==='bad'?'bad':c==='warn'?'warn':c==='ok'?'ok':'';
@@ -317,7 +328,7 @@ function tripCard(t){
  const ch=tripChecks(t);const bad=ch.filter(c=>c[0]==='bad').length,warn=ch.filter(c=>c[0]==='warn').length;
  return`<a class="card tagged tripcard" style="--c:${stCol(t.status)}" href="#trip/${t.id}"><div class="row" style="justify-content:space-between"><h2>${esc(t.name)}</h2>${when}</div>
  <div class="dates">${t.start?esc(fr(t.start,t.end)):(t.pencil?'Pencilled in: '+esc(t.pencil):'Dates not set')}${nights?' · '+nights:''}</div>${t.summary?`<div class="sub" style="margin-top:4px">${esc(t.summary)}</div>`:''}
- ${t.status==='done'?'':`<div class="row" style="margin-top:8px">${bad?`<span class="pill bad">${bad} to fix</span>`:''}${warn?`<span class="pill warn">${warn} to do</span>`:''}${!bad&&!warn?'<span class="pill ok">Nothing flagged</span>':''}<span class="pill">${t.stays.length} stays</span><span class="pill">${t.bookings.length} bookings</span></div>`}</a>`;
+ ${t.status==='done'?'':`<div class="row" style="margin-top:8px">${bad?`<span class="pill bad">${bad} to fix</span>`:''}${warn?`<span class="pill warn">${warn} to do</span>`:''}${!bad&&!warn?'<span class="pill ok">Nothing flagged</span>':''}${['planning','research','backup'].includes(t.status)?`<span class="pill ${readyN(t)===READY.length?'ok':''}">Ready ${readyN(t)}/${READY.length}</span>`:''}<span class="pill">${t.stays.length} stays</span><span class="pill">${t.bookings.length} bookings</span></div>`}</a>`;
 }
 
 function tripView(t){
@@ -336,6 +347,7 @@ function ovTab(t){
  return`<div class="kv" style="margin-bottom:12px"><div class="stat"><b>${span??'?'}</b><span>nights door to door</span></div><div class="stat"><b>${ground}</b><span>nights in stays</span></div>
  <div class="stat"><b>${booked}/${t.bookings.length}</b><span>bookings made</span></div><div class="stat"><b>${t.stays.filter(s=>s.booked).length}/${t.stays.length}</b><span>stays booked</span></div></div>
  ${t.summary||t.goals?`<div class="card">${t.summary?`<p style="margin:0 0 8px">${esc(t.summary)}</p>`:''}${t.goals?`<div class="sect" style="margin-top:4px">Goals for this trip</div><div style="white-space:pre-wrap">${esc(t.goals)}</div>`:''}</div>`:''}
+ ${['planning','research','backup'].includes(t.status)?`<div class="sect">Ready to book: ${readyN(t)} of ${READY.length}</div><div class="card"><div class="sub" style="margin-bottom:6px">Everything picked, nothing booked. When all are ticked, set the status to Ready to book.</div><ul class="plain">${READY.map(([k,l,h])=>{const hv=h(t);return`<li class="item"><input type="checkbox" class="cb" data-act="tog-ready" data-k="${k}"${(t.ready||{})[k]?' checked':''} aria-label="${esc(l)}"><div class="grow ${(t.ready||{})[k]?'done-t':''}">${esc(l)}${hv?`<div class="meta">${esc(hv)}</div>`:''}</div></li>`}).join('')}</ul></div>`:''}
  <div class="sect">Checks</div><div class="card"><ul class="plain checks">${ch.length?ch.map(c=>`<li><span class="pill ${pillFor(c[0])}">${c[0]==='bad'?'Fix':c[0]==='warn'?'To do':'Note'}</span> ${esc(c[1])}</li>`).join(''):'<li><span class="pill ok">Clear</span> Nothing flagged</li>'}</ul></div>
  <div class="sect">Open items</div><div class="card"><ul class="plain">${t.openItems.map(o=>`<li class="item"><input type="checkbox" class="cb" data-act="tog-open" data-id="${o.id}"${o.done?' checked':''} aria-label="Done"><div class="grow ${o.done?'done-t':''}">${esc(o.text)}</div><button class="btn ghost sm" data-act="del-open" data-id="${o.id}" aria-label="Remove">✕</button></li>`).join('')||'<li class="sub">None</li>'}</ul>
  <form class="inline-add" data-act="add-open"><input name="t" placeholder="Add an open item" aria-label="Add an open item"><button class="btn sm">Add</button></form></div>
@@ -582,6 +594,7 @@ document.addEventListener('change',e=>{
  const el=e.target;const act=el.dataset.act;const t=curTrip()||(el.dataset.trip&&trip(el.dataset.trip));
  if(el.id==='filein'&&el.files[0]){const fr=new FileReader();fr.onload=()=>doImport(fr.result);fr.readAsText(el.files[0]);el.value='';return}
  if(act==='tog-open'){t.openItems.find(o=>o.id===el.dataset.id).done=el.checked;commit()}
+ else if(act==='tog-ready'){if(!t.ready)t.ready={};t.ready[el.dataset.k]=el.checked;commit()}
  else if(act==='tog-li'){t.lists.find(l=>l.id===el.dataset.l).items.find(i=>i.id===el.dataset.id).done=el.checked;commit()}
  else if(act==='actual'){const tt=t||S.trips.find(isNow);dayById(tt,el.dataset.day).actual=el.value;save();toast('Saved')}
  else if(act==='audit-notes'){t.auditNotes=el.value;save();toast('Saved')}
